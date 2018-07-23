@@ -25,7 +25,7 @@ package org.aion.vm;
 import org.aion.mcf.vm.AbstractExecutionResult;
 
 /**
- * A ExecutionResult is the result of a VM execution. It contains the VM status
+ * A ExecutionResult is the getResult of a VM execution. It contains the VM status
  * code, nrg usage, output, etc.
  *
  * @author yulong

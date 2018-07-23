@@ -30,7 +30,7 @@ import org.aion.zero.types.AionInternalTx;
 import java.util.*;
 
 /**
- * TransacitonResults wraps the result of a transaction execution. It mainly
+ * TransacitonResults wraps the getResult of a transaction execution. It mainly
  * includes:
  * <p>
  * <ol>
@@ -76,7 +76,7 @@ public class TransactionResult extends AbstractExecutionResult {
     private List<Call> calls = new ArrayList<>();
 
     /**
-     * Create a new execution result.
+     * Create a new execution getResult.
      */
     public TransactionResult() {
         super(ResultCode.SUCCESS, 0);
@@ -199,7 +199,7 @@ public class TransactionResult extends AbstractExecutionResult {
     }
 
     /**
-     * Merge another execution result.
+     * Merge another execution getResult.
      *
      * @param another
      */

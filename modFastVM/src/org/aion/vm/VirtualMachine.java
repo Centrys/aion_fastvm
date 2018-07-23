@@ -53,7 +53,7 @@ public interface VirtualMachine {
      * @param code byte code
      * @param ctx the execution context
      * @param track state repository track
-     * @return the execution result
+     * @return the execution getResult
      */
     ExecutionResult run(byte[] code, ExecutionContext ctx, IRepositoryCache track);
 }

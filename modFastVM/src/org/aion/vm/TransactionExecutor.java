@@ -120,7 +120,7 @@ public class TransactionExecutor extends AbstractExecutor {
         DataWord blockDifficulty = new DataWord(diff);
 
         /*
-         * execution and transaction result
+         * execution and transaction getResult
          */
         exeResult = new ExecutionResult(ResultCode.SUCCESS, nrgLimit);
         txResult = new TransactionResult();
@@ -152,7 +152,7 @@ public class TransactionExecutor extends AbstractExecutor {
      * Execute the transaction
      */
     public AionTxExecSummary execute() {
-        return (AionTxExecSummary) execute(tx, ctx.nrgLimit());
+        return (AionTxExecSummary) execute(tx, ctx.getNrgLimit());
     }
 
     /**
@@ -163,7 +163,7 @@ public class TransactionExecutor extends AbstractExecutor {
             .getPrecompiledContract(tx.getTo(), tx.getFrom(), this.repoTrack);
 
         if (pc != null) {
-            exeResult = pc.execute(tx.getData(), ctx.nrgLimit());
+            exeResult = pc.execute(tx.getData(), ctx.getNrgLimit());
         } else {
             // execute code
             byte[] code = repoTrack.getCode(tx.getTo());
@@ -258,7 +258,7 @@ public class TransactionExecutor extends AbstractExecutor {
 //        AionTxReceipt receipt = new AionTxReceipt();
 //        receipt.setTransaction(tx);
 //        receipt.setLogs(txResult.getLogs());
-//        receipt.setNrgUsed(getNrgUsed(tx.nrgLimit()));
+//        receipt.setNrgUsed(getNrgUsed(tx.getNrgLimit()));
 //        receipt.setExecutionResult(exeResult.getOutput());
 //        receipt
 //            .setError(exeResult.getCode() == ResultCode.SUCCESS ? "" : exeResult.getCode().name());

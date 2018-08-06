@@ -33,3 +33,9 @@
 
 # Build files
 build/
+native/
+report/
+
+# ide
+/mod*/.idea/
+/mod*/*.iml

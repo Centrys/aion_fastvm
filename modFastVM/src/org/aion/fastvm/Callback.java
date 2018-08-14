@@ -230,8 +230,12 @@ public class Callback {
      */
     static byte[] performCall(byte[] message, FastVM vm, ContractFactory factory) {
         ExecutionContext ctx = parseMessage(message);
-        IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> track =
-                repo().startTracking();
+
+
+
+
+
+        IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> track = repo().startTracking();
 
         // check call stack depth
         if (ctx.depth() >= Constants.MAX_CALL_DEPTH) {

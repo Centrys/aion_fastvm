@@ -589,25 +589,11 @@ public class CallbackUnitTest {
         when(pair.getLeft()).thenReturn(context);
         when(pair.getRight()).thenReturn(new DummyRepository());
         Callback.push(pair);
-        ExecutionContext ctx =
-                newExecutionContext(
-                        getNewAddress(),
-                        getNewAddress(),
-                        new DataWord(RandomUtils.nextBytes(DataWord.BYTES)),
-                        false,
-                        false,
-                        ExecutionContext.DELEGATECALL,
-                        nrgLimit);
-        byte[] message =
-                generateContextMessage(
-                        ctx.address(),
-                        ctx.sender(),
-                        ctx.nrgLimit(),
-                        ctx.callValue(),
-                        ctx.callData(),
-                        ctx.depth(),
-                        ctx.kind(),
-                        ctx.flags());
+        ExecutionContext ctx = newExecutionContext(getNewAddress(), getNewAddress(),
+            new DataWord(RandomUtils.nextBytes(DataWord.BYTES)),false,
+            false, ExecutionContext.DELEGATECALL, nrgLimit);
+        byte[] message = generateContextMessage(ctx.address(), ctx.sender(), ctx.nrgLimit(),
+            ctx.callValue(), ctx.callData(), ctx.depth(), ctx.kind(), ctx.flags());
 
         ExecutionContext expectedContext = makeExpectedContext(context, ctx);
         compareContexts(expectedContext, Callback.parseMessage(message));
@@ -634,25 +620,11 @@ public class CallbackUnitTest {
         }
         for (int i = 0; i < depths; i++) {
             // test every other ctx with empty data
-            ExecutionContext ctx =
-                    newExecutionContext(
-                            getNewAddress(),
-                            getNewAddress(),
-                            new DataWord(RandomUtils.nextBytes(DataWord.BYTES)),
-                            i % 2 == 0,
-                            false,
-                            ExecutionContext.DELEGATECALL,
-                            nrgLimit);
-            byte[] message =
-                    generateContextMessage(
-                            ctx.address(),
-                            ctx.sender(),
-                            ctx.nrgLimit(),
-                            ctx.callValue(),
-                            ctx.callData(),
-                            ctx.depth(),
-                            ctx.kind(),
-                            ctx.flags());
+            ExecutionContext ctx = newExecutionContext(getNewAddress(), getNewAddress(),
+                new DataWord(RandomUtils.nextBytes(DataWord.BYTES)),i % 2 == 0,
+                false, ExecutionContext.DELEGATECALL, nrgLimit);
+            byte[] message = generateContextMessage(ctx.address(), ctx.sender(), ctx.nrgLimit(),
+                ctx.callValue(), ctx.callData(), ctx.depth(), ctx.kind(), ctx.flags());
             ExecutionContext expectedContext = makeExpectedContext(Callback.context(), ctx);
             compareContexts(expectedContext, Callback.parseMessage(message));
             Callback.pop();
@@ -675,25 +647,11 @@ public class CallbackUnitTest {
         when(pair.getLeft()).thenReturn(context);
         when(pair.getRight()).thenReturn(new DummyRepository());
         Callback.push(pair);
-        ExecutionContext ctx =
-                newExecutionContext(
-                        getNewAddress(),
-                        getNewAddress(),
-                        new DataWord(RandomUtils.nextBytes(DataWord.BYTES)),
-                        true,
-                        false,
-                        ExecutionContext.DELEGATECALL,
-                        nrgLimit);
-        byte[] message =
-                generateContextMessage(
-                        ctx.address(),
-                        ctx.sender(),
-                        ctx.nrgLimit(),
-                        ctx.callValue(),
-                        ctx.callData(),
-                        ctx.depth(),
-                        ctx.kind(),
-                        ctx.flags());
+        ExecutionContext ctx = newExecutionContext(getNewAddress(), getNewAddress(),
+            new DataWord(RandomUtils.nextBytes(DataWord.BYTES)),true,
+            false, ExecutionContext.DELEGATECALL, nrgLimit);
+        byte[] message = generateContextMessage(ctx.address(), ctx.sender(), ctx.nrgLimit(),
+            ctx.callValue(), ctx.callData(), ctx.depth(), ctx.kind(), ctx.flags());
 
         ExecutionContext expectedContext = makeExpectedContext(context, ctx);
         compareContexts(expectedContext, Callback.parseMessage(message));
@@ -2007,25 +1965,12 @@ public class CallbackUnitTest {
      * the context at the top of the stack when the fields in context are used to generate the
      * message given to the parseMessage method.
      */
-    private ExecutionContext makeExpectedContext(
-            ExecutionContext previous, ExecutionContext context) {
-        return new ExecutionContext(
-                previous.transactionHash(),
-                context.address(),
-                previous.origin(),
-                context.sender(),
-                previous.nrgPrice(),
-                context.nrgLimit(),
-                context.callValue(),
-                context.callData(),
-                context.depth(),
-                context.kind(),
-                context.flags(),
-                previous.blockCoinbase(),
-                previous.blockNumber(),
-                previous.blockTimestamp(),
-                previous.blockNrgLimit(),
-                previous.blockDifficulty());
+    private ExecutionContext makeExpectedContext(ExecutionContext previous, ExecutionContext context) {
+        return new ExecutionContext(previous.transactionHash(), context.address(),
+            previous.origin(), context.sender(), previous.nrgPrice(), context.nrgLimit(),
+            context.callValue(), context.callData(), context.depth(), context.kind(),
+            context.flags(), previous.blockCoinbase(), previous.blockNumber(),
+            previous.blockTimestamp(), previous.blockNrgLimit(), previous.blockDifficulty());
     }
 
     /**
@@ -2225,25 +2170,14 @@ public class CallbackUnitTest {
      * @param isCreateContract If the op code is CREATE
      * @param kind Transaction kind.
      */
-    private void checkPerformCallResults(
-            ExecutionContext context,
-            BigInteger callerBalance,
-            BigInteger recipientBalance,
-            boolean wasNoRecipient,
-            boolean isCreateContract,
-            int kind) {
+    private void checkPerformCallResults(ExecutionContext context, BigInteger callerBalance,
+        BigInteger recipientBalance, boolean wasNoRecipient, boolean isCreateContract, int kind) {
 
         ExecutionContext ctx = Callback.context();
-        checkInternalTransaction(
-                context, ctx.helper().getInternalTransactions().get(0), isCreateContract);
-        checkPerformCallBalances(
-                context.sender(),
-                callerBalance,
-                context.address(),
-                recipientBalance,
-                context.callValue().value(),
-                wasNoRecipient,
-                kind);
+        checkInternalTransaction(context, ctx.helper().getInternalTransactions().get(0),
+            isCreateContract);
+        checkPerformCallBalances(context.sender(), callerBalance, context.address(), recipientBalance,
+            context.callValue().value(), wasNoRecipient, kind);
     }
 
     /**
@@ -2371,14 +2305,8 @@ public class CallbackUnitTest {
      * Asserts that the account balances are in the expected state after a call to performCall. Note
      * if we are doing CALLCODE or DELEGATECALL then no value gets transferred in Callback.
      */
-    private void checkPerformCallBalances(
-            Address caller,
-            BigInteger callerPrevBalance,
-            Address recipient,
-            BigInteger recipientPrevBalance,
-            BigInteger callValue,
-            boolean wasNoRecipient,
-            int kind) {
+    private void checkPerformCallBalances(Address caller, BigInteger callerPrevBalance, Address recipient,
+        BigInteger recipientPrevBalance, BigInteger callValue, boolean wasNoRecipient, int kind) {
 
         if (caller.equals(recipient)) {
             assertEquals(callerPrevBalance, Callback.repo().getBalance(caller));
@@ -2420,14 +2348,9 @@ public class CallbackUnitTest {
         assertEquals(context.sender(), tx.getFrom());
         if (isCreateContract) {
             // Decrement nonce because the transaction incremented it after address was made.
-            Address contract =
-                    new Address(
-                            HashUtil.calcNewAddr(
-                                    context.sender().toBytes(),
-                                    Callback.repo()
-                                            .getNonce(context.sender())
-                                            .subtract(BigInteger.ONE)
-                                            .toByteArray()));
+            Address contract = new Address(HashUtil.calcNewAddr(context.sender().toBytes(),
+                Callback.repo().getNonce(context.sender()).subtract(BigInteger.ONE)
+                    .toByteArray()));
             assertEquals(contract, tx.getTo());
         } else {
             assertEquals(context.address(), tx.getTo());

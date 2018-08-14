@@ -171,14 +171,15 @@ public class TransactionExecutorUnitTest {
     @Test
     public void testBuildReceiptGetErrorWhenResultNotSuccess() {
         for (int i = -1; i < 12; i++) {
-            if (!ResultCode.fromInt(i).equals(ResultCode.SUCCESS)) {
-                ResultCode code = ResultCode.fromInt(i);
+            ResultCode code = ResultCode.fromInt(i);
+            if (!code.equals(ResultCode.SUCCESS)) {
                 TransactionExecutor executor = getNewExecutor(mockTx(), false, 10);
                 byte[] output = RandomUtils.nextBytes(RandomUtils.nextInt(0, 1000));
                 executor.setExecutionResult(new ExecutionResult(code, 0, output));
                 AionTxReceipt receipt =
                         (AionTxReceipt)
-                                executor.buildReceipt(
+                                executor
+                    .buildReceipt(
                                         new AionTxReceipt(), mockTx(), new ArrayList());
                 assertEquals(code.name(), receipt.getError());
             }
@@ -623,6 +624,22 @@ public class TransactionExecutorUnitTest {
         byte[] value = RandomUtils.nextBytes(8);
         value[0] |= 0x80; // Creates a negative value.
         doPrepareInsufficientBalance(true, nrgPrice, value);
+    }
+
+    @Test
+    public void testPrepareInsufficientBalanceUseNegativeEnergyPriceContractCreation() {
+        // Need the +1 on the long since absolute value of MIN_VALUE is not defined.
+        byte[] value = RandomUtils.nextBytes(8);
+        value[0] &= 0x7F;   // Creates a positive value.
+        doPrepareInsufficientBalance(true, Long.MIN_VALUE + 1, value);
+    }
+
+    @Test
+    public void testPrepareInsufficientBalanceUseNegativeEnergyPrice() {
+        // Need the +1 on the long since absolute value of MIN_VALUE is not defined.
+        byte[] value = RandomUtils.nextBytes(8);
+        value[0] &= 0x7F;   // Creates a positive value.
+        doPrepareInsufficientBalance(false, Long.MIN_VALUE + 1, value);
     }
 
     @Test

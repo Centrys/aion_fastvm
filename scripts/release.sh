@@ -1,7 +1,7 @@
 #!/bin/sh
 
 if [ $# -eq 2 ]; then
-    cd aion_fastvm 
+    cd aion_fastvm
 else
     cd "$(dirname "$0")/.."
 fi
@@ -36,7 +36,7 @@ tar -czf ${fastvm_dir}.tar.gz ${fastvm_dir}
 
 
 # copy libraries
-rm -r ${solidity_dir} 
+rm -r ${solidity_dir}
 mkdir ${solidity_dir} && cd ${solidity_dir}
 cp /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.58.0 .
 cp /usr/lib/x86_64-linux-gnu/libboost_program_options.so.1.58.0 .
@@ -44,8 +44,8 @@ cp /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.58.0 .
 cp /usr/lib/x86_64-linux-gnu/libboost_system.so.1.58.0 .
 cp /usr/lib/x86_64-linux-gnu/libjsoncpp.so.1 .
 cd ..
-cp solc ${fastvm_dir}
-cd  ${fastvm_dir}
+cp solc ${solidity_dir}
+cd  ${solidity_dir}
 
 # construct the file list
 tee file.list << END

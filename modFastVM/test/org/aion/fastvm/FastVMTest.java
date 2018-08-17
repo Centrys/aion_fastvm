@@ -1,54 +1,58 @@
-/*******************************************************************************
+/*
+ * Copyright (c) 2017-2018 Aion foundation.
  *
- * Copyright (c) 2017 Aion foundation.
+ *     This file is part of the aion network project.
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
+ *     The aion network project is free software: you can redistribute it
+ *     and/or modify it under the terms of the GNU General Public License
+ *     as published by the Free Software Foundation, either version 3 of
+ *     the License, or any later version.
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
+ *     The aion network project is distributed in the hope that it will
+ *     be useful, but WITHOUT ANY WARRANTY; without even the implied
+ *     warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *     See the GNU General Public License for more details.
  *
  *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <https://www.gnu.org/licenses/>
+ *     along with the aion network project source files.
+ *     If not, see <https://www.gnu.org/licenses/>.
  *
  * Contributors:
  *     Aion foundation.
- ******************************************************************************/
+ */
 package org.aion.fastvm;
 
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.math.BigInteger;
+import java.util.Collections;
 import org.aion.base.type.Address;
 import org.aion.base.util.ByteUtil;
 import org.aion.base.util.Hex;
 import org.aion.contract.ContractUtils;
 import org.aion.crypto.ECKey;
 import org.aion.mcf.core.ImportResult;
+import org.aion.vm.AbstractExecutionResult.ResultCode;
+import org.aion.mcf.vm.types.DataWord;
+import org.aion.vm.DummyRepository;
 import org.aion.vm.ExecutionContext;
 import org.aion.vm.ExecutionResult;
-import org.aion.vm.ExecutionResult.Code;
-import org.aion.vm.TransactionResult;
-import org.aion.mcf.vm.types.DataWord;
+import org.aion.vm.Forks;
 import org.aion.zero.impl.BlockContext;
 import org.aion.zero.impl.StandaloneBlockchain;
 import org.aion.zero.impl.types.AionBlock;
 import org.aion.zero.impl.types.AionTxInfo;
 import org.aion.zero.types.AionTransaction;
 import org.apache.commons.lang3.RandomUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import java.io.IOException;
-import java.math.BigInteger;
-import java.util.Collections;
-
-import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 
 public class FastVMTest {
 
@@ -72,9 +76,7 @@ public class FastVMTest {
     private int kind = ExecutionContext.CREATE;
     private int flags = 0;
 
-    private TransactionResult txResult;
-
-    public FastVMTest() throws CloneNotSupportedException {
+    public FastVMTest() {
     }
 
     @Before
@@ -83,7 +85,6 @@ public class FastVMTest {
         nrgLimit = 20000;
         callValue = DataWord.ZERO;
         callData = new byte[0];
-        txResult = new TransactionResult();
     }
 
     @Test
@@ -95,14 +96,14 @@ public class FastVMTest {
     public void testRun() {
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         FastVM vm = new FastVM();
 
         byte[] code = Hex.decode("6FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF60020160E052601060E0F3");
         ExecutionResult result = vm.run(code, ctx, new DummyRepository());
         System.out.println(result);
 
-        assertEquals(Code.SUCCESS, result.getCode());
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
         assertEquals(19985, result.getNrgLeft());
         assertEquals(16, result.getOutput().length);
     }
@@ -111,7 +112,7 @@ public class FastVMTest {
     public void testGetCodeByAddress1() {
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         FastVM vm = new FastVM();
 
         byte[] code = Hex
@@ -121,7 +122,7 @@ public class FastVMTest {
         ExecutionResult result = vm.run(code, ctx, repo);
         System.out.println(result);
 
-        assertEquals(Code.SUCCESS, result.getCode());
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
         assertEquals("0000000000000000000000000000000000000000000000000000000000000000",
                 Hex.toHexString(result.getOutput()));
     }
@@ -130,7 +131,7 @@ public class FastVMTest {
     public void testGetCodeByAddress2() {
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         FastVM vm = new FastVM();
 
         byte[] code = Hex
@@ -141,7 +142,7 @@ public class FastVMTest {
         ExecutionResult result = vm.run(code, ctx, repo);
         System.out.println(result);
 
-        assertEquals(Code.SUCCESS, result.getCode());
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
         assertEquals("1122334400000000000000000000000000000000000000000000000000000000",
                 Hex.toHexString(result.getOutput()));
     }
@@ -150,7 +151,7 @@ public class FastVMTest {
     public void testGetCodeSize() {
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         FastVM vm = new FastVM();
 
         byte[] code = Hex
@@ -158,10 +159,10 @@ public class FastVMTest {
         DummyRepository repo = new DummyRepository();
         repo.addContract(Address.wrap(Hex.decode("1111111111111111111111111111111111111111111111111111111111111111")), Hex.decode("11223344"));
 
-        ExecutionResult result = vm.run(code, ctx, repo);
+        ExecutionResult result = vm.run(code,  ctx, repo);
         System.out.println(result);
 
-        assertEquals(Code.SUCCESS, result.getCode());
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
         assertEquals("00000000000000000000000000000004", Hex.toHexString(result.getOutput()));
     }
 
@@ -169,7 +170,7 @@ public class FastVMTest {
     public void testBalance() {
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         FastVM vm = new FastVM();
 
         byte[] code = Hex
@@ -177,10 +178,10 @@ public class FastVMTest {
         DummyRepository repo = new DummyRepository();
         repo.addBalance(Address.wrap(Hex.decode("1111111111111111111111111111111111111111111111111111111111111111")), BigInteger.valueOf(0x34));
 
-        ExecutionResult result = vm.run(code, ctx, repo);
+        ExecutionResult result = vm.run(code,  ctx, repo);
         System.out.println(result);
 
-        assertEquals(Code.SUCCESS, result.getCode());
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
         assertEquals("00000000000000000000000000000034", Hex.toHexString(result.getOutput()));
     }
 
@@ -197,7 +198,7 @@ public class FastVMTest {
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         FastVM vm = new FastVM();
 
         DummyRepository repo = new DummyRepository();
@@ -209,7 +210,7 @@ public class FastVMTest {
         ExecutionResult result = vm.run(callerCtr, ctx, repo);
         System.out.println(result);
 
-        assertEquals(Code.SUCCESS, result.getCode());
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
         assertEquals("00000000000000000000000000000003", Hex.toHexString(result.getOutput()));
     }
 
@@ -222,7 +223,7 @@ public class FastVMTest {
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         FastVM vm = new FastVM();
 
         DummyRepository repo = new DummyRepository();
@@ -230,8 +231,8 @@ public class FastVMTest {
         ExecutionResult result = vm.run(contract, ctx, repo);
         System.out.println(result);
 
-        assertEquals(Code.SUCCESS, result.getCode());
-        assertTrue(result.getOutput().length == 32);
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
+        assertEquals(32, result.getOutput().length);
     }
 
     @Test
@@ -243,14 +244,14 @@ public class FastVMTest {
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
         repo.addContract(address, contract);
 
         FastVM vm = new FastVM();
         ExecutionResult result = vm.run(contract, ctx, repo);
         System.out.println(result);
-        assertEquals(Code.SUCCESS, result.getCode());
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
     }
 
     @Test
@@ -262,14 +263,14 @@ public class FastVMTest {
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
         repo.addContract(address, contract);
 
         FastVM vm = new FastVM();
         ExecutionResult result = vm.run(contract, ctx, repo);
         System.out.println(result);
-        assertEquals(Code.SUCCESS, result.getCode());
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
     }
 
     @Test
@@ -281,14 +282,14 @@ public class FastVMTest {
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
         repo.addContract(address, contract);
 
         FastVM vm = new FastVM();
         ExecutionResult result = vm.run(contract, ctx, repo);
         System.out.println(result);
-        assertEquals(Code.SUCCESS, result.getCode());
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
     }
 
     @Test
@@ -300,14 +301,14 @@ public class FastVMTest {
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
         repo.addContract(address, contract);
 
         FastVM vm = new FastVM();
         ExecutionResult result = vm.run(contract, ctx, repo);
         System.out.println(result);
-        assertEquals(Code.OUT_OF_NRG, result.getCode());
+        assertEquals(ResultCode.OUT_OF_NRG, result.getResultCode());
     }
 
     @Test
@@ -321,7 +322,7 @@ public class FastVMTest {
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
 
         FastVM vm = new FastVM();
@@ -331,12 +332,12 @@ public class FastVMTest {
     }
 
     @Test
-    public void testLOG0Loop() throws Exception {
+    public void testLOG0Loop() {
         String code = "5b" + "632fffffff6000a0" + "600056";
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
 
         FastVM vm = new FastVM();
@@ -346,33 +347,33 @@ public class FastVMTest {
     }
 
     @Test
-    public void testSHA3Loop() throws Exception {
+    public void testSHA3Loop() {
         String code = "5b" + "632fffffff60002050" + "600056";
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
 
         FastVM vm = new FastVM();
-        ExecutionResult result = vm.run(Hex.decode(code), ctx, repo);
+        ExecutionResult result = vm.run(Hex.decode(code),  ctx, repo);
         System.out.println(result);
         assertEquals(0, result.getNrgLeft());
     }
 
     @Test
-    public void testSHA3LargeMemory() throws Exception {
+    public void testSHA3LargeMemory() {
         String code = "6f0000000000000000000000003FFFFFFF" // push
                 + "6f00000000000000000000000000000000" // push
                 + "20"; // SHA3
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
 
         FastVM vm = new FastVM();
-        ExecutionResult result = vm.run(Hex.decode(code), ctx, repo);
+        ExecutionResult result = vm.run(Hex.decode(code),  ctx, repo);
         System.out.println(result);
         assertEquals(0, result.getNrgLeft());
     }
@@ -386,14 +387,14 @@ public class FastVMTest {
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
         repo.addContract(address, code);
 
         FastVM vm = new FastVM();
         ExecutionResult result = vm.run(code, ctx, repo);
         System.out.println(result);
-        assertEquals(Code.SUCCESS, result.getCode());
+        assertEquals(ResultCode.SUCCESS, result.getResultCode());
         assertTrue(result.getOutput().length > 0);
     }
 
@@ -406,7 +407,7 @@ public class FastVMTest {
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
         repo.addContract(address, code);
 
@@ -425,7 +426,7 @@ public class FastVMTest {
 
         ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit, callValue,
                 callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit,
-                blockDifficulty, txResult);
+                blockDifficulty);
         DummyRepository repo = new DummyRepository();
         repo.addContract(address, code);
 
@@ -435,7 +436,7 @@ public class FastVMTest {
 
         // NOTE: after the byzantine fork, if the CREATE call fails, the
         // reserved gas got revertd.
-        assertEquals(Code.REVERT, result.getCode());
+        assertEquals(ResultCode.REVERT, result.getResultCode());
         assertTrue(result.getNrgLeft() > 0);
     }
 
@@ -518,85 +519,6 @@ public class FastVMTest {
 
         assertEquals(BigInteger.valueOf(3), bc.getRepository().getNonce(Address.wrap(deployerAccount.getAddress())));
         assertEquals(BigInteger.valueOf(2), bc.getRepository().getNonce(contractAddress));
-    }
-
-    @Test
-    public void testNonceIssue() throws InterruptedException {
-        String testerByteCode = "0x60506040525b3360006000508282909180600101839055555050505b610020565b6107ab8061002f6000396000f30060506040523615610096576000356c01000000000000000000000000900463ffffffff16806306c8dcde1461009a578063590e1ae3146100c657806367a3914e146100dc5780636aee4cac1461010857806379ba5097146101525780638135ceea146101685780638da5cb5b146101d9578063a6f9dae11461020a578063b22fce4014610236578063d4ee1d901461027a57610096565b5b5b005b34156100a65760006000fd5b6100c4600480808060100135903590916020019091929050506102ab565b005b34156100d25760006000fd5b6100da610308565b005b34156100e85760006000fd5b6101066004808080601001359035909160200190919290505061035a565b005b34156101145760006000fd5b610138600480808060100135903590600019169090916020019091929050506103b7565b604051808215151515815260100191505060405180910390f35b341561015e5760006000fd5b6101666103e3565b005b34156101745760006000fd5b6101d760048080806010013590359060001916909091602001909192908080601001359035906000191690909160200190919290803590601001908201803590601001919091929080359060100190820180359060100191909192905050610470565b005b34156101e55760006000fd5b6101ed61062b565b604051808383825281601001526020019250505060405180910390f35b34156102165760006000fd5b6102346004808080601001359035909160200190919290505061063a565b005b34156102425760006000fd5b61026060048080806010013590359091602001909192905050610676565b604051808215151515815260100191505060405180910390f35b34156102865760006000fd5b61028e6106a2565b604051808383825281601001526020019250505060405180910390f35b600060005080600101549054339091149190141615156102cb5760006000fd5b600160046000506000848482528160100152602001908152601001600020905060006101000a81548160ff0219169083151502179055505b5b5050565b600060005080600101549054339091149190141615156103285760006000fd5b336108fc3031908115029060405160006040518083038185898989f194505050505015156103565760006000fd5b5b5b565b6000600050806001015490543390911491901416151561037a5760006000fd5b600060046000506000848482528160100152602001908152601001600020905060006101000a81548160ff0219169083151502179055505b5b5050565b60056000506020528181600052601052603060002090506000915091509054906101000a900460ff1681565b60026000508060010154905433909114919014161561046d5760026000508060010154905460006000508282909180600101839055555050506000600060026000508282909180600101839055555050506000600050806001015490547fa701229f4b9ddf00aa1c7228d248e6320ee7c581d856ddfba036e73947cd0d1360405160405180910390a25b5b565b60006000600050806001015490543390911491901416806104b85750600460005060003382528160100152602001908152601001600020905060009054906101000a900460ff165b15156104c45760006000fd5b868660056000506000838390600019169090600019169082528160100152602001908152601001600020905060009054906101000a900460ff1615151561050b5760006000fd5b600092506000925082505b8686905083101561057157610563878785818110151561053257fe5b905090906020020180601001359035878787818110151561054f57fe5b9050909060100201356106b163ffffffff16565b5b8280600101935050610516565b6001600560005060008b8b90600019169090600019169082528160100152602001908152601001600020905060006101000a81548160ff0219169083151502179055507f1fa305c7f8521af161de570532762ed7a60199cde79e18e1d259af34595625218c8c8c8c6040518085859060001916909060001916908252816010015260200183839060001916909060001916908252816010015260200194505050505060405180910390a15b5b50505b505050505050505050565b60006000508060010154905482565b6000600050806001015490543390911491901416151561065a5760006000fd5b818160026000508282909180600101839055555050505b5b5050565b60046000506020528181600052601052603060002090506000915091509054906101000a900460ff1681565b60026000508060010154905482565b6000600050806001015490543390911491901416806106f75750600460005060003382528160100152602001908152601001600020905060009054906101000a900460ff165b15156107035760006000fd5b82826108fc83908115029060405160006040518083038185898989f194505050505015156107315760006000fd5b7fdc3b8ebc415c945740a70187f1d472ad2d64a9e7a87047f38023aec56516976b84848460405180848482528160100152602001828152601001935050505060405180910390a15b5b5050505600a165627a7a7230582042b26e68ff40177f10fcfc05c70e102d5d14648a2134ffeec77c7138bf8d27dd0029";
-        StandaloneBlockchain.Bundle bundle = (new StandaloneBlockchain.Builder())
-                .withValidatorConfiguration("simple")
-                .withDefaultAccounts()
-                .build();
-        StandaloneBlockchain bc = bundle.bc;
-        ECKey deployerAccount = bundle.privateKeys.get(0);
-
-        //=======================================================================
-        BigInteger nonce = BigInteger.ZERO;
-
-        AionTransaction tx = new AionTransaction(
-                nonce.toByteArray(),
-                null,
-                new byte[0],
-                ByteUtil.hexStringToBytes(testerByteCode),
-                1_000_000L,
-                1L
-        );
-        tx.sign(deployerAccount);
-        assertThat(tx.isContractCreation()).isTrue();
-
-        BlockContext context = bc.createNewBlockContext(
-                bc.getBestBlock(), Collections.singletonList(tx), false);
-
-        ImportResult result = bc.tryToConnect(context.block);
-        assertThat(result).isEqualTo(ImportResult.IMPORTED_BEST);
-        Address contractAddress = tx.getContractAddress();
-        System.out.println("contractAddress = " + contractAddress);
-        System.out.println("xxx = " + bc.getRepository().getNonce(Address.wrap(deployerAccount.getAddress())));
-        Thread.sleep(1000L);
-
-        //=======================================================================
-        nonce = nonce.add(BigInteger.ONE);
-
-        AionTransaction makeTestCallTx = new AionTransaction(
-                nonce.toByteArray(),
-                contractAddress,
-                new BigInteger("100000000000000000000").toByteArray(),
-                new byte[0],
-                1_000_000L,
-                1L
-        );
-        makeTestCallTx.sign(deployerAccount);
-
-        BlockContext context2 = bc.createNewBlockContext(
-                bc.getBestBlock(), Collections.singletonList(makeTestCallTx), false);
-        ImportResult result2 = bc.tryToConnect(context2.block);
-        assertThat(result2).isEqualTo(ImportResult.IMPORTED_BEST);
-        System.out.println("xxx = " + bc.getRepository().getNonce(Address.wrap(deployerAccount.getAddress())));
-        System.out.println("yyy = " + bc.getRepository().getNonce(contractAddress));
-        Thread.sleep(1000L);
-
-        //=======================================================================
-        nonce = nonce.add(BigInteger.ONE);
-
-        AionTransaction anotherMakeTestCall = new AionTransaction(
-                nonce.toByteArray(),
-                contractAddress,
-                new byte[0],
-                ByteUtil.hexStringToBytes("8135ceeaed74e1cebcdf60ec1905306af9047ed58b97371172d829b76ec0c7a6f5019aeaa00c984eebbf0e215ba982fb512a6ebada666282c5db807dfd0496f1ad0231d7000000000000000000000000000000600000000000000000000000000000009000000000000000000000000000000001a693d979d27668ec1927806418dfbcadd6cc477c8772c80abed2caf50be47ed800000000000000000000000000000001000000000000000000000002540be400"),
-                1_000_000L,
-                1L
-        );
-        anotherMakeTestCall.sign(deployerAccount);
-
-        BlockContext context3 = bc.createNewBlockContext(
-                bc.getBestBlock(), Collections.singletonList(anotherMakeTestCall), false);
-        ImportResult result3 = bc.tryToConnect(context3.block);
-        assertThat(result3).isEqualTo(ImportResult.IMPORTED_BEST);
-        System.out.println("xxx = " + bc.getRepository().getNonce(Address.wrap(deployerAccount.getAddress())));
-        System.out.println("yyy = " + bc.getRepository().getNonce(contractAddress));
-
-        assertEquals(BigInteger.valueOf(3L), bc.getRepository().getNonce(Address.wrap(deployerAccount.getAddress())));
-        assertEquals(BigInteger.valueOf(1L), bc.getRepository().getNonce(contractAddress));
     }
 
     @Test
@@ -764,5 +686,10 @@ public class FastVMTest {
         AionTxInfo info4 = bc.getTransactionInfo(context4.block.getTransactionsList().get(0).getHash());
         assertEquals("", info4.getReceipt().getError());
         assertEquals(11, new DataWord(info4.getReceipt().getExecutionResult()).intValue());
+    }
+
+    @After
+    public void teardown() {
+        Forks.clearTestState();
     }
 }

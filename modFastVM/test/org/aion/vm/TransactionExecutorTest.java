@@ -1,165 +1,287 @@
-/*******************************************************************************
- *
- * Copyright (c) 2017 Aion foundation.
- *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <https://www.gnu.org/licenses/>
- *
- * Contributors:
- *     Aion foundation.
- ******************************************************************************/
 package org.aion.vm;
-
-import org.aion.base.db.IRepositoryCache;
-import org.aion.base.type.Address;
-import org.aion.base.util.Hex;
-import org.aion.mcf.core.AccountState;
-import org.aion.crypto.ECKeyFac;
-import org.aion.mcf.db.IBlockStoreBase;
-import org.aion.fastvm.DummyRepository;
-import org.aion.fastvm.TestUtils;
-import org.aion.contract.ContractUtils;
-import org.aion.solidity.CompilationResult;
-import org.aion.solidity.Compiler;
-import org.aion.solidity.Compiler.Options;
-import org.aion.mcf.vm.types.DataWord;
-import org.aion.zero.impl.types.AionBlock;
-import org.aion.zero.types.AionTransaction;
-import org.aion.zero.types.AionTxReceipt;
-import org.junit.Test;
-
-import java.io.IOException;
-import java.math.BigInteger;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
+import java.math.BigInteger;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import org.aion.base.db.IRepository;
+import org.aion.base.db.IRepositoryCache;
+import org.aion.base.type.Address;
+import org.aion.base.util.Hex;
+import org.aion.contract.ContractUtils;
+import org.aion.crypto.ECKey;
+import org.aion.fastvm.TestVMProvider;
+import org.aion.log.AionLoggerFactory;
+import org.aion.log.LogEnum;
+import org.aion.mcf.core.ImportResult;
+import org.aion.mcf.vm.types.DataWord;
+import org.aion.vm.AbstractExecutionResult.ResultCode;
+import org.aion.zero.impl.BlockContext;
+import org.aion.zero.impl.StandaloneBlockchain;
+import org.aion.zero.impl.StandaloneBlockchain.Builder;
+import org.aion.zero.impl.types.AionBlock;
+import org.aion.zero.types.AionInternalTx;
+import org.aion.zero.types.AionTransaction;
+import org.aion.zero.types.AionTxExecSummary;
+import org.apache.commons.lang3.RandomUtils;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.slf4j.Logger;
+
+/**
+ * Tests TransactionExecutor in more of an integration style testing.
+ */
 public class TransactionExecutorTest {
+    private static final Logger LOGGER_VM = AionLoggerFactory.getLogger(LogEnum.VM.toString());
+    private static final String f_func = "26121ff0";
+    private static final String g_func = "e2179b8e";
+    private StandaloneBlockchain blockchain;
+    private ECKey deployerKey;
+    private Address deployer;
 
-    @Test
-    public void testCallTransaction() throws IOException {
-        Compiler.Result r = Compiler.getInstance().compile(
-                ContractUtils.readContract("Ticker.sol"), Options.ABI, Options.BIN);
-        CompilationResult cr = CompilationResult.parse(r.output);
-        String deployer = cr.contracts.get("Ticker").bin; // deployer
-        String contract = deployer.substring(deployer.indexOf("60506040", 1)); // contract
+    @Before
+    public void setup() {
+        StandaloneBlockchain.Bundle bundle = (new StandaloneBlockchain.Builder())
+            .withValidatorConfiguration("simple")
+            .withDefaultAccounts()
+            .build();
+        blockchain = bundle.bc;
+        deployerKey = bundle.privateKeys.get(0);
+        deployer = new Address(deployerKey.getAddress());
+    }
 
-        byte[] txNonce = DataWord.ZERO.getData();
-        Address from = Address.wrap(Hex.decode("1111111111111111111111111111111111111111111111111111111111111111"));
-        Address to = Address.wrap(Hex.decode("2222222222222222222222222222222222222222222222222222222222222222"));
-        byte[] value = DataWord.ZERO.getData();
-        byte[] data = Hex.decode("c0004213");
-        long nrg = new DataWord(100000L).longValue();
-        long nrgPrice = DataWord.ONE.longValue();
-        AionTransaction tx = new AionTransaction(txNonce, from, to, value, data, nrg, nrgPrice);
-
-        AionBlock block = TestUtils.createDummyBlock();
-
-        DummyRepository repo = new DummyRepository();
-        repo.addBalance(from, BigInteger.valueOf(100_000).multiply(tx.nrgPrice().value()));
-        repo.addContract(to, Hex.decode(contract));
-
-        TransactionExecutor exec = new TransactionExecutor(tx, block, repo);
-        AionTxReceipt receipt = exec.execute().getReceipt();
-        System.out.println(receipt);
-
-        assertArrayEquals(Hex.decode("00000000000000000000000000000000"), receipt.getExecutionResult());
+    @After
+    public void tearDown() {
+        blockchain = null;
+        deployerKey = null;
+        deployer = null;
     }
 
     @Test
-    public void testCreateTransaction() throws IOException {
-        Compiler.Result r = Compiler.getInstance().compile(
-                ContractUtils.readContract("Ticker.sol"), Options.ABI, Options.BIN);
-        CompilationResult cr = CompilationResult.parse(r.output);
-        String deployer = cr.contracts.get("Ticker").bin;
-        System.out.println(deployer);
-
-        byte[] txNonce = DataWord.ZERO.getData();
-        Address from = Address.wrap(Hex.decode("1111111111111111111111111111111111111111111111111111111111111111"));
-        Address to = Address.EMPTY_ADDRESS();
-        byte[] value = DataWord.ZERO.getData();
-        byte[] data = Hex.decode(deployer);
-        long nrg = 500_000L;
+    public void testExecutor() throws IOException {
+        Address to = getNewRecipient(true);
+        byte[] deployCode = ContractUtils.getContractDeployer("ByteArrayMap.sol", "ByteArrayMap");
+        long nrg = 1_000_000;
         long nrgPrice = 1;
-        AionTransaction tx = new AionTransaction(txNonce, from, to, value, data, nrg, nrgPrice);
+        BigInteger value = BigInteger.ZERO;
+        BigInteger nonce = BigInteger.ZERO;
 
-        AionBlock block = TestUtils.createDummyBlock();
+        AionTransaction tx = new AionTransaction(nonce.toByteArray(), to, value.toByteArray(),
+            deployCode, nrg, nrgPrice);
+        tx.sign(deployerKey);
+        assertTrue(tx.isContractCreation());
+        assertEquals(Builder.DEFAULT_BALANCE, blockchain.getRepository().getBalance(deployer));
+        assertEquals(BigInteger.ZERO, blockchain.getRepository().getNonce(deployer));
+        BlockContext context = blockchain.createNewBlockContext(blockchain.getBestBlock(),
+            Collections.singletonList(tx), false);
 
-        IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> repo = new DummyRepository();
-        repo.addBalance(from, BigInteger.valueOf(500_000L).multiply(tx.nrgPrice().value()));
+        IRepositoryCache repo = blockchain.getRepository().startTracking();
+        TransactionExecutor exec = new TransactionExecutor(tx, context.block, repo, LOGGER_VM);
+        exec.setExecutorProvider(new TestVMProvider());
+        AionTxExecSummary summary = exec.execute();
+        BigInteger refund = summary.getRefund();
 
-        TransactionExecutor exec = new TransactionExecutor(tx, block, repo);
-        AionTxReceipt receipt = exec.execute().getReceipt();
-        System.out.println(receipt);
+        // We expect that there is a new account created, the contract, with 0 balance and 0 nonce
+        // and that its code is the contract body. We also expect that the deployer (sender) has
+        // its nonce incremented and its balance is now equal to its old balance minus the transaction
+        // fee plus the refund
+        byte[] body = ContractUtils.getContractBody("ByteArrayMap.sol", "ByteArrayMap");
 
-        assertArrayEquals(Hex.decode(deployer.substring(deployer.indexOf("60506040", 1))),
-                receipt.getExecutionResult());
+        ExecutionResult res = (ExecutionResult) exec.exeResult;
+        assertEquals(ResultCode.SUCCESS, res.getResultCode());
+        assertArrayEquals(body, res.getOutput());
+
+        Address contract = summary.getTransaction().getContractAddress();
+        assertArrayEquals(body, repo.getCode(contract));
+        assertEquals(BigInteger.ZERO, repo.getBalance(contract));
+        assertEquals(BigInteger.ZERO, repo.getNonce(contract));
+
+        BigInteger txFee = BigInteger.valueOf(nrg).multiply(BigInteger.valueOf(nrgPrice));
+        assertEquals(Builder.DEFAULT_BALANCE.subtract(txFee).add(refund), repo.getBalance(deployer));
+        assertEquals(BigInteger.ONE, repo.getNonce(deployer));
     }
 
     @Test
-    public void testPerformance() throws IOException {
-        Compiler.Result r = Compiler.getInstance().compile(
-                ContractUtils.readContract("Ticker.sol"), Options.ABI, Options.BIN);
-        CompilationResult cr = CompilationResult.parse(r.output);
-        String deployer = cr.contracts.get("Ticker").bin; // deployer
-        String contract = deployer.substring(deployer.indexOf("60506040", 1)); // contract
+    public void testExecutorBlind() throws IOException {
+        Address to = getNewRecipient(true);
+        byte[] deployCode = ContractUtils.getContractDeployer("ByteArrayMap.sol", "ByteArrayMap");
+        long nrg = 1_000_000;
+        long nrgPrice = 1;
+        BigInteger value = BigInteger.ZERO;
+        BigInteger nonce = BigInteger.ZERO;
 
-        byte[] txNonce = DataWord.ZERO.getData();
-        Address from = Address.wrap(Hex.decode("1111111111111111111111111111111111111111111111111111111111111111"));
-        Address to = Address.wrap(Hex.decode("2222222222222222222222222222222222222222222222222222222222222222"));
-        byte[] value = DataWord.ZERO.getData();
-        byte[] data = Hex.decode("c0004213");
-        long nrg = new DataWord(100000L).longValue();
-        long nrgPrice = DataWord.ONE.longValue();
-        AionTransaction tx = new AionTransaction(txNonce, from, to, value, data, nrg, nrgPrice);
-        tx.sign(ECKeyFac.inst().create());
+        AionTransaction tx = new AionTransaction(nonce.toByteArray(), to, value.toByteArray(),
+            deployCode, nrg, nrgPrice);
+        tx.sign(deployerKey);
+        assertTrue(tx.isContractCreation());
 
-        AionBlock block = TestUtils.createDummyBlock();
+        assertEquals(Builder.DEFAULT_BALANCE, blockchain.getRepository().getBalance(deployer));
+        assertEquals(BigInteger.ZERO, blockchain.getRepository().getNonce(deployer));
 
-        DummyRepository repo = new DummyRepository();
-        repo.addBalance(from, BigInteger.valueOf(100_000).multiply(tx.nrgPrice().value()));
-        repo.addContract(to, Hex.decode(contract));
+        BlockContext context = blockchain.createNewBlockContext(blockchain.getBestBlock(),
+            Collections.singletonList(tx), false);
+        ImportResult result = blockchain.tryToConnect(context.block);
+        assertEquals(ImportResult.IMPORTED_BEST, result);
 
-        long t1 = System.nanoTime();
-        long repeat = 1000;
-        for (int i = 0; i < repeat; i++) {
-            TransactionExecutor exec = new TransactionExecutor(tx, block, repo);
-            exec.execute();
-        }
-        long t2 = System.nanoTime();
-        System.out.println((t2 - t1) / repeat);
+        // We expect that there is a new account created, the contract, with 0 balance and 0 nonce
+        // and that its code is the contract body. We also expect that the deployer (sender) has
+        // its nonce incremented and its balance is now equal to its old balance minus the transaction
+        // fee plus the refund
+        byte[] body = ContractUtils.getContractBody("ByteArrayMap.sol", "ByteArrayMap");
+        Address contract = tx.getContractAddress();
+
+        assertArrayEquals(body, blockchain.getRepository().getCode(contract));
+        assertEquals(BigInteger.ZERO, blockchain.getRepository().getBalance(contract));
+        assertEquals(BigInteger.ZERO, blockchain.getRepository().getNonce(contract));
+        assertEquals(BigInteger.ONE, blockchain.getRepository().getNonce(deployer));
+        assertEquals(Builder.DEFAULT_BALANCE.subtract(
+            BigInteger.valueOf(tx.getNrgConsume()).multiply(BigInteger.valueOf(nrgPrice))),
+            blockchain.getRepository().getBalance(deployer));
     }
 
     @Test
-    public void testBasicTransactionCost() {
-        byte[] txNonce = DataWord.ZERO.getData();
-        Address from = Address.wrap(Hex.decode("1111111111111111111111111111111111111111111111111111111111111111"));
-        Address to = Address.wrap(Hex.decode("2222222222222222222222222222222222222222222222222222222222222222"));
-        byte[] value = DataWord.ONE.getData();
-        byte[] data = new byte[0];
-        long nrg = new DataWord(100000L).longValue();
-        long nrgPrice = DataWord.ONE.longValue();
-        AionTransaction tx = new AionTransaction(txNonce, from, to, value, data, nrg, nrgPrice);
+    public void testDeployedCodeFunctionality() throws IOException {
+        Address contract = deployByteArrayContract();
+        byte[] callingCode = Hex.decode(f_func);
+        BigInteger nonce = blockchain.getRepository().getNonce(deployer);
+        AionTransaction tx = new AionTransaction(nonce.toByteArray(), contract, BigInteger.ZERO.toByteArray(),
+            callingCode, 1_000_000, 1);
+        tx.sign(deployerKey);
+        assertFalse(tx.isContractCreation());
 
-        AionBlock block = TestUtils.createDummyBlock();
+        BlockContext context = blockchain.createNewBlockContext(blockchain.getBestBlock(),
+            Collections.singletonList(tx), false);
+        IRepositoryCache repo = blockchain.getRepository().startTracking();
+        TransactionExecutor exec = new TransactionExecutor(tx, context.block, repo, LOGGER_VM);
+        exec.setExecutorProvider(new TestVMProvider());
+        AionTxExecSummary summary = exec.execute();
+        ExecutionResult res = (ExecutionResult) exec.exeResult;
+        assertEquals(ResultCode.SUCCESS, res.getResultCode());
+        System.out.println(Hex.toHexString(res.getOutput()));
 
-        DummyRepository repo = new DummyRepository();
-        repo.addBalance(from, BigInteger.valueOf(1_000_000_000L));
+        // We called the function f() which returns nothing.
+        assertEquals(0, summary.getReceipt().getExecutionResult().length);
 
-        TransactionExecutor exec = new TransactionExecutor(tx, block, repo);
-        AionTxReceipt receipt = exec.execute().getReceipt();
-        System.out.println(receipt);
+        byte[] body = ContractUtils.getContractBody("ByteArrayMap.sol", "ByteArrayMap");
+        assertArrayEquals(body, blockchain.getRepository().getCode(contract));
 
-        assertEquals(tx.transactionCost(block.getNumber()), receipt.getEnergyUsed());
+        // Now we call the g() function, which returns a byte array of 1024 bytes that starts with
+        // 'a' and ends with 'b'
+        callingCode = Hex.decode(g_func);
+        nonce = repo.getNonce(deployer);
+        tx = new AionTransaction(nonce.toByteArray(), contract, BigInteger.ZERO.toByteArray(),
+            callingCode, 1_000_000, 1);
+        tx.sign(deployerKey);
+        assertFalse(tx.isContractCreation());
+
+        context = blockchain.createNewBlockContext(blockchain.getBestBlock(),
+            Collections.singletonList(tx), false);
+        exec = new TransactionExecutor(tx, context.block, repo, LOGGER_VM);
+        exec.setExecutorProvider(new TestVMProvider());
+        exec.execute();
+
+        res = (ExecutionResult) exec.exeResult;
+        byte[] output = res.getOutput();
+        System.out.println(Hex.toHexString(output));
+        System.out.println(res.getOutput().length);
+
+//        // I'm guessing: first data word is the number of bytes that follows. Then those following
+//        // bytes denote the size of the output, which follows these last bytes.
+//        int len = new DataWord(Arrays.copyOfRange(output, 0, DataWord.BYTES)).intValue();
+//        byte[] outputLen = new byte[len];
+//        System.arraycopy(output, DataWord.BYTES, outputLen, 0, len);
+//        int outputSize = new BigInteger(outputLen).intValue();
+//
+//        byte[] expected = new byte[1024];
+//        expected[0] = 'a';
+//        expected[1023] = 'b';
+//
+//        byte[] out = new byte[outputSize];
+//        System.arraycopy(output, DataWord.BYTES + len, out, 0, outputSize);
+
+        byte[] expected = new byte[1024];
+        expected[0] = 'a';
+        expected[1023] = 'b';
+
+        byte[] out = extractActualOutput(output);
+
+        assertArrayEquals(expected, out);
     }
+
+    @Test
+    public void testGfunction() throws IOException {
+        Address contract = deployByteArrayContract();
+        byte[] callingCode = Hex.decode(g_func);
+        BigInteger nonce = blockchain.getRepository().getNonce(deployer);
+        AionTransaction tx = new AionTransaction(nonce.toByteArray(), contract, BigInteger.ZERO.toByteArray(),
+            callingCode, 1_000_000, 1);
+        tx.sign(deployerKey);
+        assertFalse(tx.isContractCreation());
+
+        BlockContext context = blockchain.createNewBlockContext(blockchain.getBestBlock(),
+            Collections.singletonList(tx), false);
+        IRepositoryCache repo = blockchain.getRepository().startTracking();
+        TransactionExecutor exec = new TransactionExecutor(tx, context.block, repo, LOGGER_VM);
+        exec.setExecutorProvider(new TestVMProvider());
+        AionTxExecSummary summary = exec.execute();
+        System.out.println(summary.getReceipt());
+
+        ExecutionResult res = (ExecutionResult) exec.exeResult;
+//        System.out.println(Hex.toHexString(res.getOutput()));
+//        System.out.println(res.getOutput().length);
+
+        byte[] out = extractActualOutput(res.getOutput());
+        assertEquals(0, out.length);
+    }
+
+
+    // <-----------------------------------------HELPERS------------------------------------------->
+
+    private Address deployByteArrayContract() throws IOException {
+        Address to = getNewRecipient(true);
+        byte[] deployCode = ContractUtils.getContractDeployer("ByteArrayMap.sol", "ByteArrayMap");
+        long nrg = 1_000_000;
+        long nrgPrice = 1;
+        BigInteger value = BigInteger.ZERO;
+        BigInteger nonce = BigInteger.ZERO;
+
+        AionTransaction tx = new AionTransaction(nonce.toByteArray(), to, value.toByteArray(),
+            deployCode, nrg, nrgPrice);
+        tx.sign(deployerKey);
+        assertTrue(tx.isContractCreation());
+
+        assertEquals(Builder.DEFAULT_BALANCE, blockchain.getRepository().getBalance(deployer));
+        assertEquals(BigInteger.ZERO, blockchain.getRepository().getNonce(deployer));
+
+        BlockContext context = blockchain.createNewBlockContext(blockchain.getBestBlock(),
+            Collections.singletonList(tx), false);
+        blockchain.tryToConnect(context.block);
+
+        return tx.getContractAddress();
+    }
+
+    private Address getNewRecipient(boolean isContractCreation) {
+        return (isContractCreation) ? null : new Address(RandomUtils.nextBytes(Address.ADDRESS_LEN));
+    }
+
+    private byte[] extractActualOutput(byte[] rawOutput) {
+        // I'm guessing: first data word is the number of bytes that follows. Then those following
+        // bytes denote the size of the output, which follows these last bytes.
+        int len = new DataWord(Arrays.copyOfRange(rawOutput, 0, DataWord.BYTES)).intValue();
+        byte[] outputLen = new byte[len];
+        System.arraycopy(rawOutput, DataWord.BYTES, outputLen, 0, len);
+        int outputSize = new BigInteger(outputLen).intValue();
+
+        byte[] out = new byte[outputSize];
+        System.arraycopy(rawOutput, DataWord.BYTES + len, out, 0, outputSize);
+        return out;
+    }
+
 }

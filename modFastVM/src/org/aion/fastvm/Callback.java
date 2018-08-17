@@ -1,38 +1,43 @@
-/*******************************************************************************
- *
+/*
  * Copyright (c) 2017-2018 Aion foundation.
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
+ *     This file is part of the aion network project.
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
+ *     The aion network project is free software: you can redistribute it
+ *     and/or modify it under the terms of the GNU General Public License
+ *     as published by the Free Software Foundation, either version 3 of
+ *     the License, or any later version.
+ *
+ *     The aion network project is distributed in the hope that it will
+ *     be useful, but WITHOUT ANY WARRANTY; without even the implied
+ *     warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *     See the GNU General Public License for more details.
  *
  *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <https://www.gnu.org/licenses/>
+ *     along with the aion network project source files.
+ *     If not, see <https://www.gnu.org/licenses/>.
  *
  * Contributors:
  *     Aion foundation.
- ******************************************************************************/
+ */
+
 package org.aion.fastvm;
 
 import org.aion.base.db.IRepositoryCache;
 import org.aion.base.type.Address;
+import org.aion.base.type.IExecutionResult;
 import org.aion.base.util.ByteUtil;
-import org.aion.base.util.Hex;
+import org.aion.base.vm.IDataWord;
+import org.aion.vm.AbstractExecutionResult.ResultCode;
+import org.aion.vm.Forks;
+import org.aion.vm.IPrecompiledContract;
+import org.aion.precompiled.ContractFactory;
 import org.aion.vm.ExecutionContext;
 import org.aion.vm.ExecutionResult;
 import org.aion.mcf.core.AccountState;
 import org.aion.crypto.HashUtil;
 import org.aion.mcf.db.IBlockStoreBase;
 import org.aion.mcf.vm.Constants;
-import org.aion.vm.*;
-import org.aion.vm.ExecutionResult.Code;
-import org.aion.vm.PrecompiledContracts.PrecompiledContract;
 import org.aion.zero.types.AionInternalTx;
 import org.aion.mcf.vm.types.DataWord;
 import org.aion.mcf.vm.types.Log;
@@ -144,7 +149,7 @@ public class Callback {
      * @return
      */
     public static byte[] getStorage(byte[] address, byte[] key) {
-        DataWord value = repo().getStorageValue(Address.wrap(address), new DataWord(key));
+        IDataWord value = repo().getStorageValue(Address.wrap(address), new DataWord(key));
 
         // System.err.println("GET_STORAGE: address = " + Hex.toHexString(address) + ", key = " + Hex.toHexString(key) + ", value = " + (value == null ? "":Hex.toHexString(value.getData())));
 
@@ -174,16 +179,18 @@ public class Callback {
     public static void selfDestruct(byte[] owner, byte[] beneficiary) {
         BigInteger balance = repo().getBalance(Address.wrap(owner));
 
-        newInternalTx(Address.wrap(owner), Address.wrap(beneficiary), repo().getNonce(Address.wrap(owner)), new DataWord(balance), ByteUtil.EMPTY_BYTE_ARRAY,
-                "selfdestruct");
+        // add internal transaction
+        AionInternalTx internalTx = newInternalTx(Address.wrap(owner), Address.wrap(beneficiary), repo().getNonce(Address.wrap(owner)),
+                new DataWord(balance), ByteUtil.EMPTY_BYTE_ARRAY, "selfdestruct");
+        context().helper().addInternalTransaction(internalTx);
 
+        // transfer
         repo().addBalance(Address.wrap(owner), balance.negate());
-
-        if (!owner.equals(beneficiary)) {
+        if (!Arrays.equals(owner, beneficiary)) {
             repo().addBalance(Address.wrap(beneficiary), balance);
         }
 
-        context().result().addDeleteAccount(Address.wrap(owner));
+        context().helper().addDeleteAccount(Address.wrap(owner));
     }
 
     /**
@@ -201,7 +208,44 @@ public class Callback {
             list.add(t);
         }
 
-        context().result().addLog(new Log(Address.wrap(address), list, data));
+        context().helper().addLog(new Log(Address.wrap(address), list, data));
+    }
+
+    /**
+     * This method only exists so that FastVM and ContractFactory can be mocked for testing. This
+     * method was formerly called call and now the call method simply invokes this method with new
+     * istances of the fast vm and contract factory.
+     */
+    static byte[] performCall(byte[] message, FastVM vm, ContractFactory factory) {
+        ExecutionContext ctx = parseMessage(message);
+        IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> track = repo().startTracking();
+
+        // check call stack depth
+        if (ctx.depth() >= Constants.MAX_CALL_DEPTH) {
+            return new ExecutionResult(ResultCode.FAILURE, 0).toBytes();
+        }
+
+        // check value
+        BigInteger endowment = ctx.callValue().value();
+        BigInteger callersBalance = repo().getBalance(ctx.caller());
+        if (callersBalance.compareTo(endowment) < 0) {
+            return new ExecutionResult(ResultCode.FAILURE, 0).toBytes();
+        }
+
+        // call sub-routine
+        IExecutionResult result;
+        if (ctx.kind() == ExecutionContext.CREATE) {
+            result = doCreate(ctx, vm);
+        } else {
+            result = doCall(ctx, vm, factory);
+        }
+
+        // merge the effects
+        context().helper().merge(ctx.helper(), Forks.isSeptemberForkEnabled(context().blockNumber())
+            ? result.getCode() == ResultCode.SUCCESS.toInt()
+            : true);
+
+        return result.toBytes();
     }
 
     /**
@@ -211,26 +255,7 @@ public class Callback {
      * @return
      */
     public static byte[] call(byte[] message) {
-        ExecutionContext ctx = parseMessage(message);
-
-        // check call stack depth
-        if (ctx.depth() >= Constants.MAX_CALL_DEPTH) {
-            return new ExecutionResult(Code.FAILURE, 0).toBytes();
-        }
-
-        // check value
-        BigInteger endowment = ctx.callValue().value();
-        BigInteger callersBalance = repo().getBalance(ctx.caller());
-        if (callersBalance.compareTo(endowment) < 0) {
-            return new ExecutionResult(Code.FAILURE, 0).toBytes();
-        }
-
-        // call sub-routine
-        if (ctx.kind() == ExecutionContext.CREATE) {
-            return doCreate(ctx).toBytes();
-        } else {
-            return doCall(ctx).toBytes();
-        }
+        return performCall(message, new FastVM(), new ContractFactory());
     }
 
     /**
@@ -239,40 +264,37 @@ public class Callback {
      * @param ctx
      * @return
      */
-    private static ExecutionResult doCall(ExecutionContext ctx) {
-        IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> track = repo().startTracking();
-        ExecutionResult result = new ExecutionResult(Code.SUCCESS, ctx.nrgLimit());
+    private static IExecutionResult doCall(ExecutionContext ctx, FastVM jit, ContractFactory factory) {
+        IRepositoryCache<AccountState, IDataWord, IBlockStoreBase<?, ?>> track = repo().startTracking();
+        IExecutionResult result = new ExecutionResult(ResultCode.SUCCESS, ctx.nrgLimit());
+
+        // add internal transaction
+        AionInternalTx internalTx = newInternalTx(ctx.caller(), ctx.address(), track.getNonce(ctx.caller()), ctx.callValue(), ctx.callData(), "call");
+        context().helper().addInternalTransaction(internalTx);
+        ctx.setTransactionHash(internalTx.getHash());       // why? seems reference to ctx is lost and this unused?
 
         // transfer balance
         track.addBalance(ctx.caller(), ctx.callValue().value().negate());
         track.addBalance(ctx.address(), ctx.callValue().value());
 
-        // update nonce
-        track.incrementNonce(ctx.caller());
-
-        // add internal transaction
-        AionInternalTx internalTx = newInternalTx(ctx.caller(), ctx.address(), track.getNonce(ctx.caller()),
-                ctx.callValue(), ctx.callData(), "call");
-        ctx.result().addInternalTransaction(internalTx);
-
-        PrecompiledContract pc = PrecompiledContracts.getPrecompiledContract(ctx.address(), track, ctx);
+        IPrecompiledContract pc = factory.fetchPrecompiledContract(ctx, track);
         if (pc != null) {
             result = pc.execute(ctx.callData(), ctx.nrgLimit());
         } else {
             // get the code
-            byte[] code = track.hasAccountState(ctx.address()) ? track.getCode(ctx.address()) : ByteUtil.EMPTY_BYTE_ARRAY;
+            byte[] code = track.hasAccountState(ctx.address()) ? track.getCode(ctx.address())
+                : ByteUtil.EMPTY_BYTE_ARRAY;
 
             // execute transaction
             if (ArrayUtils.isNotEmpty(code)) {
-                FastVM jit = new FastVM();
                 result = jit.run(code, ctx, track);
             }
         }
 
         // post execution
-        if (result.getCode() != Code.SUCCESS) {
+        if (result.getCode() != ResultCode.SUCCESS.toInt()) {
             internalTx.reject();
-            ctx.result().rejectInternalTransactions(); // reject all
+            ctx.helper().rejectInternalTransactions(); // reject all
 
             track.rollback();
         } else {
@@ -285,17 +307,23 @@ public class Callback {
     /**
      * This method handles the CREATE opcode.
      *
-     * @param ctx
+     * @param ctx execution context
      * @return
      */
-    private static ExecutionResult doCreate(ExecutionContext ctx) {
+    private static ExecutionResult doCreate(ExecutionContext ctx, FastVM jit) {
         IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> track = repo().startTracking();
-        ExecutionResult result = new ExecutionResult(Code.SUCCESS, ctx.nrgLimit());
+        ExecutionResult result = new ExecutionResult(ResultCode.SUCCESS, ctx.nrgLimit());
 
         // compute new address
         byte[] nonce = track.getNonce(ctx.caller()).toByteArray();
         Address newAddress = Address.wrap(HashUtil.calcNewAddr(ctx.caller().toBytes(), nonce));
         ctx.setAddress(newAddress);
+
+        // add internal transaction
+        // TODO: should the `to` address be null?
+        AionInternalTx internalTx = newInternalTx(ctx.caller(), ctx.address(), track.getNonce(ctx.caller()), ctx.callValue(), ctx.callData(), "create");
+        context().helper().addInternalTransaction(internalTx);
+        ctx.setTransactionHash(internalTx.getHash());
 
         // in case of hashing collisions
         boolean alreadyExsits = track.hasAccountState(newAddress);
@@ -312,30 +340,29 @@ public class Callback {
         track.incrementNonce(ctx.caller());
 
         // add internal transaction
-        AionInternalTx internalTx = newInternalTx(ctx.caller(), null, track.getNonce(ctx.caller()), ctx.callValue(),
+        internalTx = newInternalTx(ctx.caller(), null, track.getNonce(ctx.caller()), ctx.callValue(),
                 ctx.callData(), "create");
-        ctx.result().addInternalTransaction(internalTx);
+        ctx.helper().addInternalTransaction(internalTx);
 
         // execute transaction
         if (alreadyExsits) {
-            result.setCodeAndNrgLeft(Code.FAILURE, 0);
+            result.setCodeAndNrgLeft(ResultCode.FAILURE.toInt(), 0);
         } else {
             if (ArrayUtils.isNotEmpty(ctx.callData())) {
-                FastVM jit = new FastVM();
                 result = jit.run(ctx.callData(), ctx, track);
             }
         }
 
         // post execution
-        if (result.getCode() != Code.SUCCESS) {
+        if (result.getCode() != ResultCode.SUCCESS.toInt()) {
             internalTx.reject();
-            ctx.result().rejectInternalTransactions(); // reject all
+            ctx.helper().rejectInternalTransactions(); // reject all
 
             track.rollback();
         } else {
             // charge the codedeposit
             if (result.getNrgLeft() < Constants.NRG_CODE_DEPOSIT) {
-                result.setCodeAndNrgLeft(Code.FAILURE, 0);
+                result.setCodeAndNrgLeft(ResultCode.FAILURE.toInt(), 0);
                 return result;
             }
             byte[] code = result.getOutput();
@@ -355,7 +382,7 @@ public class Callback {
      * @param message
      * @return
      */
-    private static ExecutionContext parseMessage(byte[] message) {
+    protected static ExecutionContext parseMessage(byte[] message) {
         ExecutionContext prev = context();
 
         ByteBuffer buffer = ByteBuffer.wrap(message);
@@ -387,31 +414,20 @@ public class Callback {
         long blockNrgLimit = prev.blockNrgLimit();
         DataWord blockDifficulty = prev.blockDifficulty();
 
-        TransactionResult txResult = prev.result();
-
         return new ExecutionContext(txHash, Address.wrap(address), origin, Address.wrap(caller), nrgPrice, nrgLimit, callValue, callData, depth,
-                kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit, blockDifficulty, txResult);
+                kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit, blockDifficulty);
     }
 
     /**
      * Creates a new internal transaction.
-     *
-     * @param from
-     * @param to
-     * @param value
-     * @param data
-     * @param note
-     * @return
      */
     private static AionInternalTx newInternalTx(Address from, Address to, BigInteger nonce, DataWord value, byte[] data,
                                                 String note) {
-        // TODO: heavily test internal transaction
-
         byte[] parentHash = context().transactionHash();
-        int deep = stack.size();
-        int idx = context().result().getInternalTransactions().size();
+        int depth = context().depth();
+        int index = context().helper().getInternalTransactions().size();
 
-        return new AionInternalTx(parentHash, deep, idx, new DataWord(nonce).getData(), from, to, value.getData(), data,
-                note);
+        return new AionInternalTx(parentHash, depth, index, new DataWord(nonce).getData(), from, to, value.getData(), data, note);
     }
+
 }

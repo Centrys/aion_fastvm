@@ -1,37 +1,28 @@
-/*******************************************************************************
+/*
+ * Copyright (c) 2017-2018 Aion foundation.
  *
- * Copyright (c) 2017 Aion foundation.
+ *     This file is part of the aion network project.
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
+ *     The aion network project is free software: you can redistribute it
+ *     and/or modify it under the terms of the GNU General Public License
+ *     as published by the Free Software Foundation, either version 3 of
+ *     the License, or any later version.
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
+ *     The aion network project is distributed in the hope that it will
+ *     be useful, but WITHOUT ANY WARRANTY; without even the implied
+ *     warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *     See the GNU General Public License for more details.
  *
  *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <https://www.gnu.org/licenses/>
+ *     along with the aion network project source files.
+ *     If not, see <https://www.gnu.org/licenses/>.
  *
  * Contributors:
  *     Aion foundation.
- ******************************************************************************/
+ */
 package org.aion.fastvm;
 
-import org.aion.base.type.Address;
-import org.aion.base.util.ByteUtil;
-import org.aion.base.util.Hex;
-import org.aion.contract.ContractUtils;
-import org.aion.vm.ExecutionContext;
-import org.aion.vm.ExecutionResult;
-import org.aion.vm.ExecutionResult.Code;
-import org.aion.vm.TransactionResult;
-import org.aion.mcf.vm.types.DataWord;
-import org.apache.commons.lang3.RandomUtils;
-import org.junit.Before;
-import org.junit.Test;
+import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -39,8 +30,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.junit.Assert.assertEquals;
+import org.aion.base.type.Address;
+import org.aion.base.util.ByteUtil;
+import org.aion.base.util.Hex;
+import org.aion.contract.ContractUtils;
+import org.aion.vm.AbstractExecutionResult.ResultCode;
+import org.aion.mcf.vm.types.DataWord;
+import org.aion.vm.DummyRepository;
+import org.aion.vm.ExecutionContext;
+import org.aion.vm.ExecutionResult;
+import org.aion.vm.ExecutionHelper;
+import org.apache.commons.lang3.RandomUtils;
+import org.junit.Before;
+import org.junit.Test;
 
 public class MultiThreadTest {
 
@@ -64,7 +66,7 @@ public class MultiThreadTest {
     private int kind = ExecutionContext.CREATE;
     private int flags = 0;
 
-    private TransactionResult txResult;
+    private ExecutionHelper helper;
 
     public MultiThreadTest() throws CloneNotSupportedException {
     }
@@ -75,7 +77,7 @@ public class MultiThreadTest {
         nrgLimit = 20000;
         callValue = DataWord.ZERO;
         callData = new byte[0];
-        txResult = new TransactionResult();
+        helper = new ExecutionHelper();
     }
 
     private static AtomicInteger count = new AtomicInteger(0);
@@ -97,12 +99,12 @@ public class MultiThreadTest {
 
                     ExecutionContext ctx = new ExecutionContext(txHash, address, origin, caller, nrgPrice, nrgLimit,
                             callValue, callData, depth, kind, flags, blockCoinbase, blockNumber, blockTimestamp,
-                            blockNrgLimit, blockDifficulty, txResult);
+                            blockNrgLimit, blockDifficulty);
                     DummyRepository repo = new DummyRepository();
 
                     FastVM vm = new FastVM();
                     ExecutionResult result = vm.run(code, ctx, repo);
-                    assertEquals(Code.SUCCESS, result.getCode());
+                    assertEquals(ResultCode.SUCCESS, result.getCode());
                 }
             });
         }

@@ -1,54 +1,57 @@
-/*******************************************************************************
+/*
+ * Copyright (c) 2017-2018 Aion foundation.
  *
- * Copyright (c) 2017 Aion foundation.
+ *     This file is part of the aion network project.
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
+ *     The aion network project is free software: you can redistribute it
+ *     and/or modify it under the terms of the GNU General Public License
+ *     as published by the Free Software Foundation, either version 3 of
+ *     the License, or any later version.
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
+ *     The aion network project is distributed in the hope that it will
+ *     be useful, but WITHOUT ANY WARRANTY; without even the implied
+ *     warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *     See the GNU General Public License for more details.
  *
  *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <https://www.gnu.org/licenses/>
+ *     along with the aion network project source files.
+ *     If not, see <https://www.gnu.org/licenses/>.
  *
  * Contributors:
  *     Aion foundation.
- ******************************************************************************/
-package org.aion.fastvm;
+ */
+package org.aion.vm;
 
+import java.math.BigInteger;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.aion.base.db.IContractDetails;
 import org.aion.base.db.IRepository;
 import org.aion.base.db.IRepositoryCache;
 import org.aion.base.type.Address;
 import org.aion.base.util.ByteUtil;
+import org.aion.base.vm.IDataWord;
 import org.aion.mcf.core.AccountState;
 import org.aion.mcf.db.IBlockStoreBase;
 import org.aion.mcf.vm.types.DataWord;
 
-import java.math.BigInteger;
-import java.util.*;
-
 public class DummyRepository implements IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> {
+    private DummyRepository parent;
+    Map<Address, AccountState> accounts = new HashMap<>();
+    Map<Address, byte[]> contracts = new HashMap<>();
+    Map<Address, Map<String, byte[]>> storage = new HashMap<>();
 
-    private Map<Address, AccountState> accounts = new HashMap<>();
-
-    private Map<Address, byte[]> contracts = new HashMap<>();
-
-    private Map<Address, Map<String, byte[]>> storage = new HashMap<>();
-
-    public DummyRepository() {
-    }
+    public DummyRepository() { }
 
     public DummyRepository(DummyRepository parent) {
         // Note: only references are copied
         accounts.putAll(parent.accounts);
         contracts.putAll(parent.contracts);
         storage.putAll(parent.storage);
+        this.parent = parent;
     }
 
     public void addContract(Address address, byte[] code) {
@@ -91,7 +94,9 @@ public class DummyRepository implements IRepositoryCache<AccountState, DataWord,
 
     @Override
     public BigInteger setNonce(Address address, BigInteger nonce) {
-        throw new RuntimeException("Not supported");
+        AccountState as = getAccountState(address);
+        as.setNonce(nonce);
+        return nonce;
     }
 
     @Override
@@ -142,12 +147,12 @@ public class DummyRepository implements IRepositoryCache<AccountState, DataWord,
     }
 
     @Override
-    public DataWord getStorageValue(Address addr, DataWord key) {
+    public IDataWord getStorageValue(Address addr, DataWord key) {
         Map<String, byte[]> map = storage.get(addr);
         if (map != null && map.containsKey(key.toString())) {
             return new DataWord(map.get(key.toString()));
         } else {
-            return DataWord.ZERO;
+            return null;
         }
     }
 
@@ -171,20 +176,6 @@ public class DummyRepository implements IRepositoryCache<AccountState, DataWord,
         return getAccountState(addr).addToBalance(value);
     }
 
-    //    @Override
-    //    public void setBalance(Address addr, BigInteger value) {
-    //        getAccountState(addr).setBalance(value);
-    //    }
-    //
-    //    @Override
-    //    public Set<Address> getAccountsKeys() {
-    //        Set<Address> set = new HashSet<>();
-    //        for (Address k : accounts.keySet()) {
-    //            set.add(k);
-    //        }
-    //        return set;
-    //    }
-
     @Override
     public IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> startTracking() {
         return new DummyRepository(this);
@@ -192,7 +183,9 @@ public class DummyRepository implements IRepositoryCache<AccountState, DataWord,
 
     @Override
     public void flush() {
-
+        this.parent.accounts = accounts;
+        this.parent.contracts = contracts;
+        this.parent.storage = storage;
     }
 
     @Override

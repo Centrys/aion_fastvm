@@ -262,7 +262,7 @@ contract A {
         tx2.sign(deployerAccount);
 
         context = bc.createNewBlockContext(bc.getBestBlock(), List.of(tx2), false);
-        TransactionExecutor exec = new TransactionExecutor(tx2, context.block, bc.getRepository().startTracking(), LOGGER_VM);
+        TransactionExecutor exec = new TransactionExecutor(tx2, context.block, context.block.getDifficulty(), bc.getRepository().startTracking(), LOGGER_VM);
         exec.setExecutorProvider(new TestVMProvider());
         AionTxExecSummary summary = exec.execute();
 
@@ -317,7 +317,7 @@ contract A {
         tx1.sign(deployerAccount);
 
         BlockContext context = bc.createNewBlockContext(bc.getBestBlock(), List.of(tx1), false);
-        TransactionExecutor exec = new TransactionExecutor(tx1, context.block, bc.getRepository().startTracking(), LOGGER_VM);
+        TransactionExecutor exec = new TransactionExecutor(tx1, context.block, context.block.getDifficulty(), bc.getRepository().startTracking(), LOGGER_VM);
         exec.setExecutorProvider(new TestVMProvider());
         AionTxExecSummary summary = exec.execute();
 

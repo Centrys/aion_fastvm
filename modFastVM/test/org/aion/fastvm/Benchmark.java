@@ -98,7 +98,7 @@ public class Benchmark {
         contract = tx.getContractAddress();
 
         // deploy contract
-        TransactionExecutor exec = new TransactionExecutor(tx, block, repo, LOGGER);
+        TransactionExecutor exec = new TransactionExecutor(tx, block, block.getDifficulty(), repo, LOGGER);
         exec.setExecutorProvider(new TestVMProvider());
         AionTxExecSummary summary = exec.execute();
         assertFalse(summary.isFailed());
@@ -168,7 +168,7 @@ public class Benchmark {
         List<AionTxReceipt> list = new ArrayList<>();
 
         for (AionTransaction tx : txs) {
-            TransactionExecutor exec = new TransactionExecutor(tx, block, repo, LOGGER);
+            TransactionExecutor exec = new TransactionExecutor(tx, block, block.getDifficulty(), repo, LOGGER);
             exec.setExecutorProvider(new TestVMProvider());
             AionTxExecSummary summary = exec.execute();
             assertFalse(summary.isFailed());
@@ -201,12 +201,12 @@ public class Benchmark {
             Address to = contract;
             byte[] value = DataWord.ZERO.getData();
             byte[] data = ByteUtil
-                .merge(Hex.decode("70a08231" + "000000000000000000000000"), recipients.get(i));
+                    .merge(Hex.decode("70a08231" + "000000000000000000000000"), recipients.get(i));
             long nrg = 1_000_000L;
             long nrgPrice = 1L;
             AionTransaction tx = new AionTransaction(nonce, from, to, value, data, nrg, nrgPrice);
 
-            TransactionExecutor exec = new TransactionExecutor(tx, block, repo, LOGGER);
+            TransactionExecutor exec = new TransactionExecutor(tx, block, block.getDifficulty(), repo, LOGGER);
             exec.setExecutorProvider(new TestVMProvider());
             AionTxExecSummary summary = exec.execute();
             assertFalse(summary.isFailed());

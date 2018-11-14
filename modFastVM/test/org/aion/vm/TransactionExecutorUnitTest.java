@@ -627,22 +627,6 @@ public class TransactionExecutorUnitTest {
     }
 
     @Test
-    public void testPrepareInsufficientBalanceUseNegativeEnergyPriceContractCreation() {
-        // Need the +1 on the long since absolute value of MIN_VALUE is not defined.
-        byte[] value = RandomUtils.nextBytes(8);
-        value[0] &= 0x7F;   // Creates a positive value.
-        doPrepareInsufficientBalance(true, Long.MIN_VALUE + 1, value);
-    }
-
-    @Test
-    public void testPrepareInsufficientBalanceUseNegativeEnergyPrice() {
-        // Need the +1 on the long since absolute value of MIN_VALUE is not defined.
-        byte[] value = RandomUtils.nextBytes(8);
-        value[0] &= 0x7F;   // Creates a positive value.
-        doPrepareInsufficientBalance(false, Long.MIN_VALUE + 1, value);
-    }
-
-    @Test
     public void testPrepareIsGoodNoSkipNonce() {
         doPrepareIsGood(false, false, true);
     }

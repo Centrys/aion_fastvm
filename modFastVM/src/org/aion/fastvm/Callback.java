@@ -23,27 +23,6 @@
 
 package org.aion.fastvm;
 
-import org.aion.base.db.IRepositoryCache;
-import org.aion.base.type.Address;
-import org.aion.base.type.IExecutionResult;
-import org.aion.base.util.ByteUtil;
-import org.aion.base.vm.IDataWord;
-import org.aion.vm.AbstractExecutionResult.ResultCode;
-import org.aion.vm.Forks;
-import org.aion.vm.IPrecompiledContract;
-import org.aion.precompiled.ContractFactory;
-import org.aion.vm.ExecutionContext;
-import org.aion.vm.ExecutionResult;
-import org.aion.mcf.core.AccountState;
-import org.aion.crypto.HashUtil;
-import org.aion.mcf.db.IBlockStoreBase;
-import org.aion.mcf.vm.Constants;
-import org.aion.zero.types.AionInternalTx;
-import org.aion.mcf.vm.types.DataWord;
-import org.aion.mcf.vm.types.Log;
-import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.tuple.Pair;
-
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -51,31 +30,55 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import org.aion.base.db.IRepositoryCache;
+import org.aion.base.type.Address;
+import org.aion.base.type.IExecutionResult;
+import org.aion.base.util.ByteUtil;
+import org.aion.base.vm.IDataWord;
+import org.aion.crypto.HashUtil;
+import org.aion.mcf.core.AccountState;
+import org.aion.mcf.db.IBlockStoreBase;
+import org.aion.mcf.vm.Constants;
+import org.aion.mcf.vm.types.DataWord;
+import org.aion.mcf.vm.types.Log;
+import org.aion.precompiled.ContractFactory;
+import org.aion.vm.AbstractExecutionResult.ResultCode;
+import org.aion.vm.ExecutionContext;
+import org.aion.vm.ExecutionResult;
+import org.aion.vm.IContractFactory;
+import org.aion.vm.IPrecompiledContract;
+import org.aion.zero.types.AionInternalTx;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.tuple.Pair;
 
 /**
- * This class handles all callbacks from the JIT side. It is not thread-safe and
- * should be synchronized for parallel execution.
- * <p>
- * All methods are static for better JNI performance.
+ * This class handles all callbacks from the JIT side. It is not thread-safe and should be
+ * synchronized for parallel execution.
+ *
+ * <p>All methods are static for better JNI performance.
  *
  * @author yulong
  */
 public class Callback {
 
-    private static LinkedList<Pair<ExecutionContext, IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>>>> stack = new LinkedList<>();
+    private static LinkedList<
+                    Pair<
+                            ExecutionContext,
+                            IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>>>>
+            stack = new LinkedList<>();
 
     /**
      * Pushes a pair of context and repository into the callback stack.
      *
      * @param pair
      */
-    public static void push(Pair<ExecutionContext, IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>>> pair) {
+    public static void push(
+            Pair<ExecutionContext, IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>>>
+                    pair) {
         stack.push(pair);
     }
 
-    /**
-     * Pops the last <context, repository> pair
-     */
+    /** Pops the last <context, repository> pair */
     public static void pop() {
         stack.pop();
     }
@@ -151,7 +154,9 @@ public class Callback {
     public static byte[] getStorage(byte[] address, byte[] key) {
         IDataWord value = repo().getStorageValue(Address.wrap(address), new DataWord(key));
 
-        // System.err.println("GET_STORAGE: address = " + Hex.toHexString(address) + ", key = " + Hex.toHexString(key) + ", value = " + (value == null ? "":Hex.toHexString(value.getData())));
+        // System.err.println("GET_STORAGE: address = " + Hex.toHexString(address) + ", key = " +
+        // Hex.toHexString(key) + ", value = " + (value == null ?
+        // "":Hex.toHexString(value.getData())));
 
         return value == null ? DataWord.ZERO.getData() : value.getData();
     }
@@ -165,7 +170,8 @@ public class Callback {
      */
     public static void putStorage(byte[] address, byte[] key, byte[] value) {
 
-        // System.err.println("PUT_STORAGE: address = " + Hex.toHexString(address) + ", key = " + Hex.toHexString(key) + ", value = " + Hex.toHexString(value));
+        // System.err.println("PUT_STORAGE: address = " + Hex.toHexString(address) + ", key = " +
+        // Hex.toHexString(key) + ", value = " + Hex.toHexString(value));
 
         repo().addStorageRow(Address.wrap(address), new DataWord(key), new DataWord(value));
     }
@@ -180,8 +186,14 @@ public class Callback {
         BigInteger balance = repo().getBalance(Address.wrap(owner));
 
         // add internal transaction
-        AionInternalTx internalTx = newInternalTx(Address.wrap(owner), Address.wrap(beneficiary), repo().getNonce(Address.wrap(owner)),
-                new DataWord(balance), ByteUtil.EMPTY_BYTE_ARRAY, "selfdestruct");
+        AionInternalTx internalTx =
+                newInternalTx(
+                        Address.wrap(owner),
+                        Address.wrap(beneficiary),
+                        repo().getNonce(Address.wrap(owner)),
+                        new DataWord(balance),
+                        ByteUtil.EMPTY_BYTE_ARRAY,
+                        "selfdestruct");
         context().helper().addInternalTransaction(internalTx);
 
         // transfer
@@ -218,6 +230,11 @@ public class Callback {
      */
     static byte[] performCall(byte[] message, FastVM vm, ContractFactory factory) {
         ExecutionContext ctx = parseMessage(message);
+
+
+
+
+
         IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> track = repo().startTracking();
 
         // check call stack depth
@@ -227,7 +244,7 @@ public class Callback {
 
         // check value
         BigInteger endowment = ctx.callValue().value();
-        BigInteger callersBalance = repo().getBalance(ctx.caller());
+        BigInteger callersBalance = repo().getBalance(ctx.sender());
         if (callersBalance.compareTo(endowment) < 0) {
             return new ExecutionResult(ResultCode.FAILURE, 0).toBytes();
         }
@@ -241,9 +258,7 @@ public class Callback {
         }
 
         // merge the effects
-        context().helper().merge(ctx.helper(), Forks.isSeptemberForkEnabled(context().blockNumber())
-            ? result.getCode() == ResultCode.SUCCESS.toInt()
-            : true);
+        context().helper().merge(ctx.helper(), result.getCode() == ResultCode.SUCCESS.toInt());
 
         return result.toBytes();
     }
@@ -264,26 +279,46 @@ public class Callback {
      * @param ctx
      * @return
      */
-    private static IExecutionResult doCall(ExecutionContext ctx, FastVM jit, ContractFactory factory) {
-        IRepositoryCache<AccountState, IDataWord, IBlockStoreBase<?, ?>> track = repo().startTracking();
+    private static IExecutionResult doCall(
+            ExecutionContext ctx, FastVM jit, IContractFactory factory) {
+        Address codeAddress = ctx.address();
+        if (ctx.kind() == ExecutionContext.CALLCODE
+                || ctx.kind() == ExecutionContext.DELEGATECALL) {
+            ctx.address = context().address();
+        }
+
+        IRepositoryCache<AccountState, IDataWord, IBlockStoreBase<?, ?>> track =
+                repo().startTracking();
         IExecutionResult result = new ExecutionResult(ResultCode.SUCCESS, ctx.nrgLimit());
 
         // add internal transaction
-        AionInternalTx internalTx = newInternalTx(ctx.caller(), ctx.address(), track.getNonce(ctx.caller()), ctx.callValue(), ctx.callData(), "call");
+        AionInternalTx internalTx =
+                newInternalTx(
+                        ctx.sender(),
+                        ctx.address(),
+                        track.getNonce(ctx.sender()),
+                        ctx.callValue(),
+                        ctx.callData(),
+                        "call");
         context().helper().addInternalTransaction(internalTx);
-        ctx.setTransactionHash(internalTx.getHash());       // why? seems reference to ctx is lost and this unused?
+        ctx.setTransactionHash(internalTx.getHash());
 
         // transfer balance
-        track.addBalance(ctx.caller(), ctx.callValue().value().negate());
-        track.addBalance(ctx.address(), ctx.callValue().value());
+        if (ctx.kind() != ExecutionContext.DELEGATECALL
+                && ctx.kind() != ExecutionContext.CALLCODE) {
+            track.addBalance(ctx.sender(), ctx.callValue().value().negate());
+            track.addBalance(ctx.address(), ctx.callValue().value());
+        }
 
-        IPrecompiledContract pc = factory.fetchPrecompiledContract(ctx, track);
+        IPrecompiledContract pc = factory.getPrecompiledContract(ctx, track);
         if (pc != null) {
             result = pc.execute(ctx.callData(), ctx.nrgLimit());
         } else {
             // get the code
-            byte[] code = track.hasAccountState(ctx.address()) ? track.getCode(ctx.address())
-                : ByteUtil.EMPTY_BYTE_ARRAY;
+            byte[] code =
+                    track.hasAccountState(codeAddress)
+                            ? track.getCode(codeAddress)
+                            : ByteUtil.EMPTY_BYTE_ARRAY;
 
             // execute transaction
             if (ArrayUtils.isNotEmpty(code)) {
@@ -311,17 +346,25 @@ public class Callback {
      * @return
      */
     private static ExecutionResult doCreate(ExecutionContext ctx, FastVM jit) {
-        IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> track = repo().startTracking();
+        IRepositoryCache<AccountState, DataWord, IBlockStoreBase<?, ?>> track =
+                repo().startTracking();
         ExecutionResult result = new ExecutionResult(ResultCode.SUCCESS, ctx.nrgLimit());
 
         // compute new address
-        byte[] nonce = track.getNonce(ctx.caller()).toByteArray();
-        Address newAddress = Address.wrap(HashUtil.calcNewAddr(ctx.caller().toBytes(), nonce));
-        ctx.setAddress(newAddress);
+        byte[] nonce = track.getNonce(ctx.sender()).toByteArray();
+        Address newAddress = Address.wrap(HashUtil.calcNewAddr(ctx.sender().toBytes(), nonce));
+        ctx.setDestination(newAddress);
 
         // add internal transaction
         // TODO: should the `to` address be null?
-        AionInternalTx internalTx = newInternalTx(ctx.caller(), ctx.address(), track.getNonce(ctx.caller()), ctx.callValue(), ctx.callData(), "create");
+        AionInternalTx internalTx =
+                newInternalTx(
+                        ctx.sender(),
+                        ctx.address(),
+                        track.getNonce(ctx.sender()),
+                        ctx.callValue(),
+                        ctx.callData(),
+                        "create");
         context().helper().addInternalTransaction(internalTx);
         ctx.setTransactionHash(internalTx.getHash());
 
@@ -333,15 +376,21 @@ public class Callback {
         track.addBalance(newAddress, oldBalance);
 
         // transfer balance
-        track.addBalance(ctx.caller(), ctx.callValue().value().negate());
+        track.addBalance(ctx.sender(), ctx.callValue().value().negate());
         track.addBalance(newAddress, ctx.callValue().value());
 
         // update nonce
-        track.incrementNonce(ctx.caller());
+        track.incrementNonce(ctx.sender());
 
         // add internal transaction
-        internalTx = newInternalTx(ctx.caller(), null, track.getNonce(ctx.caller()), ctx.callValue(),
-                ctx.callData(), "create");
+        internalTx =
+                newInternalTx(
+                        ctx.sender(),
+                        null,
+                        track.getNonce(ctx.sender()),
+                        ctx.callValue(),
+                        ctx.callData(),
+                        "create");
         ctx.helper().addInternalTransaction(internalTx);
 
         // execute transaction
@@ -414,20 +463,41 @@ public class Callback {
         long blockNrgLimit = prev.blockNrgLimit();
         DataWord blockDifficulty = prev.blockDifficulty();
 
-        return new ExecutionContext(txHash, Address.wrap(address), origin, Address.wrap(caller), nrgPrice, nrgLimit, callValue, callData, depth,
-                kind, flags, blockCoinbase, blockNumber, blockTimestamp, blockNrgLimit, blockDifficulty);
+        return new ExecutionContext(
+                txHash,
+                Address.wrap(address),
+                origin,
+                Address.wrap(caller),
+                nrgPrice,
+                nrgLimit,
+                callValue,
+                callData,
+                depth,
+                kind,
+                flags,
+                blockCoinbase,
+                blockNumber,
+                blockTimestamp,
+                blockNrgLimit,
+                blockDifficulty);
     }
 
-    /**
-     * Creates a new internal transaction.
-     */
-    private static AionInternalTx newInternalTx(Address from, Address to, BigInteger nonce, DataWord value, byte[] data,
-                                                String note) {
+    /** Creates a new internal transaction. */
+    private static AionInternalTx newInternalTx(
+            Address from, Address to, BigInteger nonce, DataWord value, byte[] data, String note) {
         byte[] parentHash = context().transactionHash();
         int depth = context().depth();
         int index = context().helper().getInternalTransactions().size();
 
-        return new AionInternalTx(parentHash, depth, index, new DataWord(nonce).getData(), from, to, value.getData(), data, note);
+        return new AionInternalTx(
+                parentHash,
+                depth,
+                index,
+                new DataWord(nonce).getData(),
+                from,
+                to,
+                value.getData(),
+                data,
+                note);
     }
-
 }
